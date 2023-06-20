@@ -1,0 +1,74 @@
+version: '3.3'
+
+services:
+  sotka-sem-nginx:
+    container_name: sotka-sem-nginx
+    image: jwilder/nginx-proxy
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      - ~/nginx/vhost.d:/etc/nginx/vhost.d:ro
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+    networks:
+      - sotka-sem-network
+
+  sotka-sem-db:
+    container_name: sotka-sem-db
+    image: mysql
+    restart: unless-stopped
+    tty: true
+    depends_on:
+      - sotka-sem-nginx
+    ports:
+      - "32541:3306"
+    environment:
+      MYSQL_DATABASE: seeds
+      MYSQL_ROOT_PASSWORD: "123"
+      SERVICE_TAGS: dev
+      SERVICE_NAME: mysql
+    networks:
+      - sotka-sem-network
+
+  sotka-sem-api:
+    container_name: sotka-sem-api
+    build:
+      context: .
+    depends_on:
+      - sotka-sem-nginx
+      - sotka-sem-db
+    environment:
+      VIRTUAL_HOST: sotka-sem.local
+      HOST_IP: "${HOST_IP:-host.docker.internal}"
+    ports:
+      - '32542:80'
+    volumes:
+      - .:/var/www/html:delegated
+    restart: always
+    networks:
+      - sotka-sem-network
+
+  sotka-sem-redis:
+    container_name: sotka-sem-redis
+    image: "redis:alpine"
+    ports:
+      - "32543:6379"
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      retries: 3
+      timeout: 5s
+    networks:
+      - sotka-sem-network
+
+  sotka-sem-mailhog:
+    container_name: sotka-sem-mailhog
+    image: "mailhog/mailhog"
+    ports:
+      - "32544:1025"
+      - "32545:8025"
+    networks:
+      - sotka-sem-network
+
+networks:
+  sotka-sem-network:
+    external: true
